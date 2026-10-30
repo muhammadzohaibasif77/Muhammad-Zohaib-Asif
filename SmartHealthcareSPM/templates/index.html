@@ -1,0 +1,1997 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="description" content="Smart Healthcare Project Management System — comprehensive tool for project planning, EVM, quality, risk, WBS, and monitoring.">
+<title>Smart Healthcare SPM — Project Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script>
+  (function(){
+    var t = localStorage.getItem('spm-theme') || 'light';
+    document.documentElement.setAttribute('data-theme', t);
+  })();
+</script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+<style>
+/* Theme variables â€” all styling handled by static/style.css */
+:root {
+    --primary:#0d9488;
+    --primary-dark:#0f766e;
+    --primary-light:#ccfbf1;
+    --dark:#134e4a;
+    --muted:#6b7280;
+    --background:#f0faf9;
+    --border:#d1fae5;
+    --border-strong:#a7f3d0;
+    --white:#ffffff;
+    --green:#059669;
+    --red:#dc2626;
+    --orange:#ea580c;
+    --surface:#f8fffd;
+}
+</style>
+</head>
+
+<body>
+<header>
+    <h1>Smart Healthcare Project Management System</h1>
+    <p>Project Planning, Execution, Quality, and Monitoring Dashboard</p>
+</header>
+
+<nav>
+    <a href="#project-form">Project Charter</a>
+    <a href="#projects">Saved Projects</a>
+    <a href="#milestones">Milestones</a>
+    <a href="#closures">Project Closure</a>
+    <a href="#requirements">Requirements Management</a>
+    <a href="#wbs">Work Breakdown Structure</a>
+    <a href="#change-requests">Change Requests</a>
+    <a href="#schedule">Schedule &amp; Resources</a>
+    <a href="#cost-evm">Cost &amp; EVM</a>
+    <a href="#quality-risk">Quality &amp; Risk Control</a>
+    <a href="#dashboard">Project Dashboard</a>
+</nav>
+
+<main>
+{% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+        {% for category, message in messages %}
+            <div class="message {{ category }}">{{ message }}</div>
+        {% endfor %}
+    {% endif %}
+{% endwith %}
+
+<!-- ACTIVE PROJECT SELECTOR & SEED BUTTON BAR -->
+{% if projects %}
+<div style="background:white; border:1px solid var(--border); border-radius:8px; padding:12px 16px; margin-bottom:18px; display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:12px;">
+    <form method="GET" action="{{ url_for('index') }}" style="display:flex; align-items:center; gap:10px; margin:0;">
+        <label for="project_switcher" style="margin:0; font-weight:600; white-space:nowrap;">Active Project:</label>
+        <select id="project_switcher" name="project_id" onchange="this.form.submit()" style="max-width:360px; padding:6px 10px;">
+            {% for p in projects %}
+            <option value="{{ p.id }}" {% if p.id == active_project_id %}selected{% endif %}>{{ p.title }} (PKR {{ "%.0f"|format(p.approved_budget or 0) }})</option>
+            {% endfor %}
+        </select>
+    </form>
+    <div>
+        <form action="{{ url_for('seed_case_study') }}" method="POST" style="margin:0; display:inline;" onsubmit="return confirm('Load realistic sample data?');">
+            <input type="hidden" name="project_id" value="{{ active_project_id }}">
+            <button class="btn btn-secondary" type="submit" style="padding:6px 12px; font-size:12px;">Load Sample Data</button>
+        </form>
+    </div>
+</div>
+{% endif %}
+
+<!-- MODULE 1: PROJECT CHARTER AND MANAGEMENT PLAN -->
+<section id="project-form">
+    <h2>1. Project Charter &amp; Management Plan</h2>
+    <p class="section-description">Create a project charter and define the main management plans.</p>
+
+    <form action="{{ url_for('save_project') }}" method="POST">
+        <input type="hidden" name="project_id" value="{{ project.id if project else '' }}">
+
+        <div class="form-grid">
+            <div class="full-width">
+                <label for="title">Project Title *</label>
+                <input id="title" name="title" required value="{{ project.title if project else '' }}" placeholder="Enter project title">
+            </div>
+
+            <div class="full-width">
+                <label for="objectives">Project Objectives *</label>
+                <textarea id="objectives" name="objectives" required placeholder="Describe project objectives">{{ project.objectives if project else '' }}</textarea>
+            </div>
+
+            <div>
+                <label for="stakeholders">Stakeholders *</label>
+                <textarea id="stakeholders" name="stakeholders" required placeholder="Project manager, developers, users...">{{ project.stakeholders if project else '' }}</textarea>
+            </div>
+
+            <div>
+                <label for="scope_boundaries">Scope Boundaries *</label>
+                <textarea id="scope_boundaries" name="scope_boundaries" required placeholder="What is included and excluded?">{{ project.scope_boundaries if project else '' }}</textarea>
+            </div>
+
+            <div>
+                <label for="approved_budget">Approved Budget</label>
+                <input id="approved_budget" type="number" min="0" step="0.01" name="approved_budget" value="{{ project.approved_budget if project else 0 }}">
+            </div>
+
+            <div>
+                <label for="deadline_weeks">Deadline (Weeks)</label>
+                <input id="deadline_weeks" type="number" min="1" name="deadline_weeks" value="{{ project.deadline_weeks if project else 1 }}" required>
+            </div>
+
+            <div>
+                <label for="status">Project Status</label>
+                <select id="status" name="status">
+                    {% for s in ['Planning', 'In Progress', 'On Hold', 'Completed', 'Cancelled'] %}
+                    <option value="{{ s }}" {% if project and project.status == s %}selected{% elif not project and s == 'Planning' %}selected{% endif %}>{{ s }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+
+        <div class="subsection">
+            <h3>Project Management Plan</h3>
+            <div class="form-grid">
+                <div>
+                    <label for="plan_scope">Scope Management Plan</label>
+                    <textarea id="plan_scope" name="plan_scope" placeholder="How will project scope be managed?">{{ project.plan_scope if project else '' }}</textarea>
+                </div>
+                <div>
+                    <label for="plan_schedule">Schedule Management Plan</label>
+                    <textarea id="plan_schedule" name="plan_schedule" placeholder="How will the schedule be monitored?">{{ project.plan_schedule if project else '' }}</textarea>
+                </div>
+                <div>
+                    <label for="plan_cost">Cost Management Plan</label>
+                    <textarea id="plan_cost" name="plan_cost" placeholder="How will project costs be controlled?">{{ project.plan_cost if project else '' }}</textarea>
+                </div>
+                <div>
+                    <label for="plan_quality">Quality Management Plan</label>
+                    <textarea id="plan_quality" name="plan_quality" placeholder="How will quality be checked?">{{ project.plan_quality if project else '' }}</textarea>
+                </div>
+            </div>
+        </div>
+
+        <div class="form-actions">
+            <button class="btn" type="submit">{{ 'Update Project' if project else 'Save Project' }}</button>
+            {% if project %}
+                <a class="btn btn-light" href="{{ url_for('index') }}">Cancel Edit</a>
+            {% endif %}
+        </div>
+    </form>
+</section>
+
+<!-- MODULE 2: SAVED PROJECTS -->
+<section id="projects">
+    <h2>2. Saved Projects</h2>
+    <p class="section-description">View, edit and delete project records.</p>
+
+    {% if projects %}
+    <div class="cards">
+        {% for p in projects %}
+        <article class="item-card">
+            <h3>{{ p.title }}</h3>
+            <p><strong>Objectives:</strong> {{ p.objectives }}</p>
+            <p><strong>Stakeholders:</strong> {{ p.stakeholders }}</p>
+            <p><strong>Scope Boundaries:</strong> {{ p.scope_boundaries }}</p>
+            <p><strong>Approved Budget:</strong> PKR {{ "%.2f"|format(p.approved_budget or 0) }}</p>
+            <p><strong>Deadline:</strong> {{ p.deadline_weeks }} week(s)</p>
+            <p><strong>Status:</strong>
+                <span class="tag {% if p.status == 'Completed' %}tag-completed{% elif p.status == 'Cancelled' %}tag-rejected{% elif p.status == 'Planning' %}tag-planning{% else %}tag-pending{% endif %}">{{ p.status }}</span>
+            </p>
+            <p><strong>Approved Scope:</strong><br><small class="muted">{{ p.approved_scope or 'No approved requirements yet' }}</small></p>
+
+            <div class="form-actions">
+                <a class="btn btn-secondary" href="{{ url_for('index', edit=p.id) }}">Edit</a>
+                <a class="btn btn-light" href="{{ url_for('index', project_id=p.id) }}">Select Active</a>
+                <form action="{{ url_for('delete_project', project_id=p.id) }}" method="POST" onsubmit="return confirm('Delete this project and its related records?');">
+                    <button class="btn btn-danger" type="submit">Delete</button>
+                </form>
+            </div>
+        </article>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="empty-state">No projects saved yet. Create your first project above.</div>
+    {% endif %}
+</section>
+
+<!-- MODULE 3: MILESTONES AND RESPONSIBILITIES -->
+<section id="milestones">
+    <h2>3. Milestones &amp; Responsibilities</h2>
+    <p class="section-description">Add project milestones, due weeks and responsible persons.</p>
+
+    {% if projects %}
+    <form action="{{ url_for('add_milestone') }}" method="POST">
+        <div class="form-grid">
+            <div>
+                <label for="milestone_project">Project *</label>
+                <select id="milestone_project" name="project_id" required>
+                    <option value="">Select a project</option>
+                    {% for p in projects %}
+                    <option value="{{ p.id }}" {% if p.id == active_project_id %}selected{% endif %}>{{ p.title }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <label for="milestone_name">Milestone Name *</label>
+                <input id="milestone_name" name="milestone_name" required placeholder="e.g. Core Modules Development &amp; Testing">
+            </div>
+            <div>
+                <label for="due_week">Due Week *</label>
+                <input id="due_week" type="number" min="1" name="due_week" required value="1">
+            </div>
+            <div>
+                <label for="responsible_person">Responsible Person</label>
+                <input id="responsible_person" name="responsible_person" placeholder="Enter person's name or role">
+            </div>
+            <div>
+                <label for="milestone_status">Milestone Status</label>
+                <select id="milestone_status" name="milestone_status">
+                    <option>Pending</option>
+                    <option>In Progress</option>
+                    <option>Completed</option>
+                </select>
+            </div>
+        </div>
+        <div class="form-actions"><button class="btn" type="submit">Add Milestone</button></div>
+    </form>
+    {% else %}
+    <div class="empty-state">Create a project before adding milestones.</div>
+    {% endif %}
+
+    <div class="subsection">
+        <h3>Saved Milestones</h3>
+        {% if milestones %}
+        <div class="cards">
+            {% for m in milestones %}
+            <article class="item-card">
+                <h3>{{ m.milestone_name }}</h3>
+                <p><strong>Project:</strong> {{ m.project_title }}</p>
+                <p><strong>Due Week:</strong> Week {{ m.due_week }}</p>
+                <p><strong>Responsible:</strong> {{ m.responsible_person or 'Not assigned' }}</p>
+                <p><strong>Status:</strong> <span class="tag {% if m.status == 'Completed' %}tag-completed{% else %}tag-pending{% endif %}">{{ m.status }}</span></p>
+                <form action="{{ url_for('delete_milestone', milestone_id=m.id) }}" method="POST" onsubmit="return confirm('Delete this milestone?');">
+                    <button class="btn btn-danger" type="submit">Delete Milestone</button>
+                </form>
+            </article>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="empty-state">No milestones have been added.</div>
+        {% endif %}
+    </div>
+</section>
+
+<!-- MODULE 4: PROJECT CLOSURE -->
+<section id="closures">
+    <h2>4. Project Closure</h2>
+    <p class="section-description">Record the final project status, completion date and closure notes.</p>
+
+    {% if projects %}
+    <form action="{{ url_for('save_closure') }}" method="POST">
+        <div class="form-grid">
+            <div>
+                <label for="closure_project">Project *</label>
+                <select id="closure_project" name="project_id" required>
+                    <option value="">Select a project</option>
+                    {% for p in projects %}
+                    <option value="{{ p.id }}" {% if p.id == active_project_id %}selected{% endif %}>{{ p.title }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <label for="completion_date">Completion / Closure Date *</label>
+                <input id="completion_date" type="date" name="completion_date" value="{{ today }}" required>
+            </div>
+            <div>
+                <label for="final_status">Final Status *</label>
+                <select id="final_status" name="final_status" required>
+                    <option value="Completed">Completed</option>
+                    <option value="Cancelled">Cancelled</option>
+                </select>
+            </div>
+            <div>
+                <label for="closure_notes">Closure Notes</label>
+                <textarea id="closure_notes" name="closure_notes" placeholder="Summarize the outcome and lessons learned"></textarea>
+            </div>
+        </div>
+        <div class="form-actions"><button class="btn" type="submit">Save Closure Record</button></div>
+    </form>
+    {% else %}
+    <div class="empty-state">Create a project before recording its closure.</div>
+    {% endif %}
+
+    <div class="subsection">
+        <h3>Closure Records</h3>
+        {% if closures %}
+        <div class="cards">
+            {% for c in closures %}
+            <article class="item-card">
+                <h3>{{ c.project_title }}</h3>
+                <p><strong>Date:</strong> {{ c.completion_date }}</p>
+                <p><strong>Final Status:</strong>
+                    <span class="tag {% if c.final_status == 'Completed' %}tag-completed{% else %}tag-rejected{% endif %}">{{ c.final_status }}</span>
+                </p>
+                <p><strong>Notes:</strong> {{ c.closure_notes or 'No notes provided' }}</p>
+            </article>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="empty-state">No project closure records have been saved.</div>
+        {% endif %}
+    </div>
+</section>
+
+<!-- MODULE 5: REQUIREMENTS MANAGEMENT -->
+<section id="requirements">
+    <h2>5. Requirements Management</h2>
+    <p class="section-description">
+        Add, update, prioritize and approve project requirements.
+        New requirements begin with Pending approval.
+    </p>
+
+    <!-- APPROVAL RULE -->
+    <div class="requirement-rule">
+        <h3>Requirement Approval Rule</h3>
+        <p>
+            <strong>Rule:</strong> Only requirements with an
+            <strong>Approved</strong> status can be included in the approved
+            project scope. Requirements with <strong>Pending</strong> or
+            <strong>Rejected</strong> status must remain excluded from the
+            approved scope.
+        </p>
+        <ul>
+            <li><span class="tag tag-approved">Approved</span> Eligible for inclusion in the approved project scope.</li>
+            <li><span class="tag tag-pending">Pending</span> Excluded until approval is granted.</li>
+            <li><span class="tag tag-rejected">Rejected</span> Excluded from the approved project scope.</li>
+        </ul>
+    </div>
+
+    {% if projects %}
+    <form action="{{ url_for('save_requirement') }}" method="POST">
+        <input type="hidden" name="requirement_id" value="{{ requirement.id if requirement else '' }}">
+
+        <div class="form-grid">
+            <div class="full-width">
+                <label for="requirement_project">Project *</label>
+                <select id="requirement_project" name="project_id" required>
+                    <option value="">Select a project</option>
+                    {% for p in projects %}
+                    <option value="{{ p.id }}" {% if (requirement and requirement.project_id == p.id) or (not requirement and p.id == active_project_id) %}selected{% endif %}>{{ p.title }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="full-width">
+                <label for="requirement_title">Requirement Title *</label>
+                <input id="requirement_title" name="requirement_title" required value="{{ requirement.title if requirement else '' }}" placeholder="e.g. Patient Appointment Booking">
+            </div>
+            <div class="full-width">
+                <label for="requirement_description">Requirement Description *</label>
+                <textarea id="requirement_description" name="requirement_description" required placeholder="Describe what the system must do">{{ requirement.description if requirement else '' }}</textarea>
+            </div>
+            <div>
+                <label for="priority">Priority *</label>
+                <select id="priority" name="priority" required>
+                    {% for level in ['High', 'Medium', 'Low'] %}
+                    <option value="{{ level }}" {% if requirement and requirement.priority == level %}selected{% elif not requirement and level == 'Medium' %}selected{% endif %}>{{ level }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+
+        <div class="form-actions">
+            <button class="btn" type="submit">{{ 'Update Requirement' if requirement else 'Add Requirement' }}</button>
+            {% if requirement %}
+            <a class="btn btn-light" href="{{ url_for('index') }}#requirements">Cancel Edit</a>
+            {% endif %}
+        </div>
+    </form>
+    {% else %}
+    <div class="empty-state">Create a project before adding requirements.</div>
+    {% endif %}
+
+    <div class="subsection">
+        <h3>Saved Requirements</h3>
+        {% if requirements %}
+        <div class="cards">
+            {% for r in requirements %}
+            <article class="item-card">
+                <h3>{{ r.title }}</h3>
+                <p><strong>Project:</strong> {{ r.project_title }}</p>
+                <p><strong>Description:</strong> {{ r.description }}</p>
+                <p><strong>Priority:</strong>
+                    <span class="tag {% if r.priority == 'High' %}tag-high{% elif r.priority == 'Low' %}tag-low{% else %}tag-medium{% endif %}">{{ r.priority }}</span>
+                </p>
+                <p><strong>Approval Status:</strong>
+                    <span class="tag {% if r.approval_status == 'Approved' %}tag-approved{% elif r.approval_status == 'Rejected' %}tag-rejected{% else %}tag-pending{% endif %}">{{ r.approval_status }}</span>
+                </p>
+                <p class="muted"><small>Created: {{ r.created_at }}</small></p>
+
+                {% if r.approval_status == 'Approved' %}
+                <p class="requirement-status approved-message">
+                    <strong>Scope Eligibility:</strong> This requirement is eligible for inclusion in the approved project scope.
+                </p>
+                {% elif r.approval_status == 'Rejected' %}
+                <p class="requirement-status rejected-message">
+                    <strong>Scope Eligibility:</strong> This requirement is excluded from the approved project scope.
+                </p>
+                {% else %}
+                <p class="requirement-status pending-message">
+                    <strong>Scope Eligibility:</strong> This requirement cannot be included in the approved project scope until it is approved.
+                </p>
+                {% endif %}
+
+                <div class="form-actions">
+                    <a class="btn btn-secondary" href="{{ url_for('index', edit_requirement=r.id) }}#requirements">Edit</a>
+
+                    <form class="inline-form" action="{{ url_for('requirement_status', requirement_id=r.id) }}" method="POST">
+                        <input type="hidden" name="approval_status" value="Approved">
+                        <button class="btn btn-success" type="submit">Approve</button>
+                    </form>
+
+                    <form class="inline-form" action="{{ url_for('requirement_status', requirement_id=r.id) }}" method="POST">
+                        <input type="hidden" name="approval_status" value="Rejected">
+                        <button class="btn btn-danger" type="submit">Reject</button>
+                    </form>
+
+                    <form class="inline-form" action="{{ url_for('requirement_status', requirement_id=r.id) }}" method="POST">
+                        <input type="hidden" name="approval_status" value="Pending">
+                        <button class="btn btn-warning" type="submit">Set Pending</button>
+                    </form>
+
+                    <form class="inline-form" action="{{ url_for('delete_requirement', requirement_id=r.id) }}" method="POST" onsubmit="return confirm('Delete this requirement?');">
+                        <button class="btn btn-light" type="submit">Delete</button>
+                    </form>
+                </div>
+            </article>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="empty-state">No requirements added yet. Use the form above to add your first requirement.</div>
+        {% endif %}
+    </div>
+</section>
+
+<!-- MODULE 6: WORK BREAKDOWN STRUCTURE -->
+<section id="wbs">
+    <h2>6. Work Breakdown Structure (WBS)</h2>
+    <p class="section-description">Divide each project into hierarchical deliverables, sub-deliverables and work packages.</p>
+
+    <div class="wbs-help">
+        <strong>Hierarchy rules:</strong>
+        A root item must be a Deliverable. Deliverables may contain
+        Sub-deliverables or Work Packages. Sub-deliverables may contain
+        Work Packages. Work Packages cannot contain child items.
+    </div>
+
+    {% if projects %}
+    <div class="subsection" style="border-top:0;padding-top:0;margin-top:0;">
+        <h3>{% if wbs_item %}Update WBS Item{% else %}Add WBS Item{% endif %}</h3>
+
+        <form action="{{ url_for('save_wbs') }}" method="POST">
+            <input type="hidden" name="wbs_id" value="{{ wbs_item.id if wbs_item else '' }}">
+
+            <div class="form-grid">
+                <div>
+                    <label for="wbs_project_id">Project *</label>
+                    <select id="wbs_project_id" name="wbs_project_id" required>
+                        <option value="">Select a project</option>
+                        {% for p in projects %}
+                        <option value="{{ p.id }}" {% if (wbs_item and wbs_item.project_id == p.id) or (not wbs_item and p.id == active_project_id) %}selected{% endif %}>{{ p.title }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div>
+                    <label for="parent_id">Parent WBS Item</label>
+                    <select id="parent_id" name="parent_id">
+                        <option value="">None (Root Deliverable)</option>
+                        {% for item in wbs_items %}
+                            {% if item.item_type != 'Work Package' and (not wbs_item or item.id != wbs_item.id) %}
+                            <option value="{{ item.id }}" data-project-id="{{ item.project_id }}" data-item-type="{{ item.item_type }}" {% if wbs_item and wbs_item.parent_id == item.id %}selected{% endif %}>
+                                {{ item.wbs_code }} - {{ item.title }} ({{ item.item_type }})
+                            </option>
+                            {% endif %}
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div>
+                    <label for="wbs_title">Item Name *</label>
+                    <input id="wbs_title" type="text" name="wbs_title" maxlength="200" required value="{{ wbs_item.title if wbs_item else '' }}" placeholder="Enter deliverable or work package name">
+                </div>
+
+                <div>
+                    <label for="item_type">Item Type *</label>
+                    <select id="item_type" name="item_type" required>
+                        <option value="Deliverable" {% if wbs_item and wbs_item.item_type == 'Deliverable' %}selected{% elif not wbs_item %}selected{% endif %}>Deliverable</option>
+                        <option value="Sub-deliverable" {% if wbs_item and wbs_item.item_type == 'Sub-deliverable' %}selected{% endif %}>Sub-deliverable</option>
+                        <option value="Work Package" {% if wbs_item and wbs_item.item_type == 'Work Package' %}selected{% endif %}>Work Package</option>
+                    </select>
+                </div>
+
+                <div class="full-width">
+                    <label for="wbs_description">Description</label>
+                    <textarea id="wbs_description" name="wbs_description" placeholder="Describe the work or deliverable">{{ wbs_item.description if wbs_item else '' }}</textarea>
+                </div>
+            </div>
+
+            <div class="form-actions">
+                <button class="btn" type="submit">{{ 'Update WBS Item' if wbs_item else 'Add WBS Item' }}</button>
+                {% if wbs_item %}
+                <a class="btn btn-light" href="{{ url_for('index') }}#wbs">Cancel Edit</a>
+                {% endif %}
+            </div>
+        </form>
+    </div>
+
+    <div class="subsection">
+        <h3>WBS Hierarchical Tree</h3>
+
+        {% macro render_wbs(nodes) %}
+            {% if nodes %}
+            <ul class="wbs-tree">
+                {% for node in nodes %}
+                <li>
+                    <div class="wbs-node">
+                        <div class="wbs-node-title">
+                            <span class="wbs-code">{{ node.wbs_code }}</span>{{ node.title }}
+                        </div>
+                        <span class="wbs-type">{{ node.item_type }}</span>
+
+                        {% if node.description %}
+                        <p class="wbs-description">{{ node.description }}</p>
+                        {% endif %}
+
+                        <div class="wbs-node-actions">
+                            <a class="btn btn-secondary" href="{{ url_for('index', edit_wbs=node.id) }}#wbs">Edit</a>
+                            <form action="{{ url_for('delete_wbs', wbs_id=node.id) }}" method="POST" onsubmit="return confirm('Delete this WBS item and all its child items?');">
+                                <button class="btn btn-danger" type="submit">Delete</button>
+                            </form>
+                        </div>
+                    </div>
+                    {{ render_wbs(node.children) }}
+                </li>
+                {% endfor %}
+            </ul>
+            {% endif %}
+        {% endmacro %}
+
+        {% for p in projects %}
+        <div class="wbs-project">
+            <h3>{{ p.title }}</h3>
+            {% set tree = wbs_trees.get(p.id, []) %}
+            {% if tree %}
+                {{ render_wbs(tree) }}
+            {% else %}
+                <div class="empty-state">No WBS items have been added for this project yet.</div>
+            {% endif %}
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="empty-state">Create a project before adding WBS items.</div>
+    {% endif %}
+</section>
+
+<!-- MODULE 7: CHANGE REQUEST MANAGEMENT -->
+<section id="change-requests">
+    <h2>7. Change Request Management</h2>
+    <p class="section-description">
+        Submit proposed project changes, document their justification,
+        estimate cost and schedule impacts, and track approval decisions.
+    </p>
+
+    <div class="change-summary">
+        <div class="summary-card">
+            <p class="summary-label">Total Requests</p>
+            <p class="summary-number">{{ change_requests|length }}</p>
+        </div>
+        <div class="summary-card">
+            <p class="summary-label">Pending</p>
+            <p class="summary-number" style="color:var(--orange);">{{ change_requests|selectattr('approval_status', 'equalto', 'Pending')|list|length }}</p>
+        </div>
+        <div class="summary-card">
+            <p class="summary-label">Approved</p>
+            <p class="summary-number" style="color:var(--green);">{{ change_requests|selectattr('approval_status', 'equalto', 'Approved')|list|length }}</p>
+        </div>
+        <div class="summary-card">
+            <p class="summary-label">Rejected</p>
+            <p class="summary-number" style="color:var(--red);">{{ change_requests|selectattr('approval_status', 'equalto', 'Rejected')|list|length }}</p>
+        </div>
+    </div>
+
+    <!-- APPROVED CHANGE REQUEST IMPACT -->
+    {% if change_impact_data and change_impact_data.approved_crs_count > 0 %}
+    <div class="cr-effect-box">
+        <h3 style="margin-top:0;">Approved Change Request Impact</h3>
+        <p style="margin:4px 0 10px; font-size:13px; color:#475569;">
+            Summary of scope, budget, and schedule adjustments from approved change requests:
+        </p>
+        <div class="cr-effect-grid">
+            <div class="cr-effect-item">
+                <strong>Scope Adjustments</strong>
+                <span>+{{ change_impact_data.approved_crs_count }} Deliverable(s)</span>
+                <small class="muted" style="display:block; margin-top:2px;">Approved in scope</small>
+            </div>
+            <div class="cr-effect-item">
+                <strong>Budget Impact</strong>
+                <span>+PKR {{ "%.2f"|format(change_impact_data.approved_crs_cost) }}</span>
+                <small class="muted" style="display:block; margin-top:2px;">Revised: PKR {{ "%.2f"|format(change_impact_data.revised_budget) }}</small>
+            </div>
+            <div class="cr-effect-item">
+                <strong>Schedule Impact</strong>
+                <span>+{{ change_impact_data.approved_crs_days }} day(s)</span>
+                <small class="muted" style="display:block; margin-top:2px;">Revised: {{ change_impact_data.revised_weeks }} weeks</small>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <div class="subsection" style="border-top:0;padding-top:0;margin-top:0;">
+        <h3>Submit a New Change Request</h3>
+
+        {% if projects %}
+        <form action="{{ url_for('save_change_request') }}" method="POST">
+            <div class="form-grid">
+                <div class="full-width">
+                    <label for="change_project_id">Project *</label>
+                    <select id="change_project_id" name="project_id" required>
+                        <option value="">Select a project</option>
+                        {% for p in projects %}
+                        <option value="{{ p.id }}" {% if p.id == active_project_id %}selected{% endif %}>{{ p.title }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="full-width">
+                    <label for="change_title">Change Request Title *</label>
+                    <input id="change_title" type="text" name="title" maxlength="200" required placeholder="e.g. AI-Based Preliminary Diagnosis Module">
+                </div>
+
+                <div class="full-width">
+                    <label for="change_description">Proposed Change Description *</label>
+                    <textarea id="change_description" name="description" required placeholder="Explain what needs to be changed or added"></textarea>
+                </div>
+
+                <div class="full-width">
+                    <label for="change_justification">Justification for Change *</label>
+                    <textarea id="change_justification" name="justification" required placeholder="Explain why this change is necessary and what benefit it provides"></textarea>
+                </div>
+
+                <div>
+                    <label for="cost_impact">Estimated Cost Impact (PKR)</label>
+                    <input id="cost_impact" type="number" name="cost_impact" step="0.01" value="0" required>
+                    <small class="muted">Positive values indicate additional cost; negative values indicate cost reduction.</small>
+                </div>
+
+                <div>
+                    <label for="schedule_impact_days">Schedule Impact (Days)</label>
+                    <input id="schedule_impact_days" type="number" name="schedule_impact_days" step="1" value="0" required>
+                    <small class="muted">Positive values indicate timeline extension (e.g. 21 days for 3 weeks).</small>
+                </div>
+
+                <div class="full-width">
+                    <label for="requested_by">Requested By</label>
+                    <input id="requested_by" type="text" name="requested_by" maxlength="150" placeholder="e.g. Hospital Management">
+                </div>
+            </div>
+
+            <div class="form-actions">
+                <button class="btn" type="submit">Submit Change Request</button>
+                <button class="btn btn-light" type="reset">Clear Form</button>
+            </div>
+        </form>
+        {% else %}
+        <div class="empty-state">Create a project before submitting a change request.</div>
+        {% endif %}
+    </div>
+
+    <div class="subsection">
+        <h3>Saved Change Requests</h3>
+
+        {% if change_requests %}
+        <div class="cards">
+            {% for cr in change_requests %}
+            <article class="item-card">
+                <h3>{{ cr.title }}</h3>
+
+                <div class="change-meta">
+                    <span class="tag {% if cr.approval_status == 'Approved' %}tag-approved{% elif cr.approval_status == 'Rejected' %}tag-rejected{% else %}tag-pending{% endif %}">{{ cr.approval_status }}</span>
+                </div>
+
+                <p><strong>Project:</strong> {{ cr.project_title }}</p>
+                <p><strong>Description:</strong> {{ cr.description }}</p>
+                <p><strong>Justification:</strong> {{ cr.justification }}</p>
+                <p><strong>Estimated Cost Impact:</strong> <span class="impact-value">PKR {{ "%.2f"|format(cr.cost_impact or 0) }}</span></p>
+                <p><strong>Schedule Impact:</strong> <span class="impact-value">{{ cr.schedule_impact_days or 0 }} day(s)</span></p>
+                <p><strong>Requested By:</strong> {{ cr.requested_by or 'Not specified' }}</p>
+                <p class="muted"><small>Submitted: {{ cr.created_at or 'Not available' }}</small></p>
+
+                {% if cr.reviewed_at %}
+                <p class="muted"><small>Reviewed: {{ cr.reviewed_at }}</small></p>
+                {% endif %}
+
+                {% if cr.reviewer_comments %}
+                <p class="review-comments"><strong>Reviewer Comments:</strong><br>{{ cr.reviewer_comments }}</p>
+                {% endif %}
+
+                <div class="review-box">
+                    <h3>Review Request</h3>
+                    <form action="{{ url_for('change_request_status', request_id=cr.id) }}" method="POST">
+                        <div>
+                            <label for="status_{{ cr.id }}">Approval Status</label>
+                            <select id="status_{{ cr.id }}" name="approval_status" required>
+                                {% for status_option in ['Pending', 'Approved', 'Rejected'] %}
+                                <option value="{{ status_option }}" {% if cr.approval_status == status_option %}selected{% endif %}>{{ status_option }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+
+                        <div style="margin-top:10px;">
+                            <label for="comments_{{ cr.id }}">Reviewer Comments</label>
+                            <textarea id="comments_{{ cr.id }}" name="reviewer_comments" placeholder="Enter review notes or reason for decision">{{ cr.reviewer_comments or '' }}</textarea>
+                        </div>
+
+                        <div class="form-actions">
+                            <button class="btn btn-success" type="submit">Save Review</button>
+                        </div>
+                    </form>
+                </div>
+
+                <div class="form-actions">
+                    <form action="{{ url_for('delete_change_request', request_id=cr.id) }}" method="POST" onsubmit="return confirm('Delete this change request?');">
+                        <button class="btn btn-danger" type="submit">Delete Request</button>
+                    </form>
+                </div>
+            </article>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="empty-state">No change requests have been submitted yet.</div>
+        {% endif %}
+    </div>
+</section>
+
+<!-- MODULE 8: SCHEDULE AND RESOURCE MANAGEMENT -->
+<section id="schedule">
+    <h2>8. Schedule &amp; Resource Management</h2>
+
+    <!-- DELAY NOTIFICATION BANNER -->
+    {% if schedule_data and schedule_data.delayed_count > 0 %}
+    <div class="alert-box critical">
+        <strong>Schedule Alert:</strong> {{ schedule_data.delayed_count }} activity(ies) are currently delayed with up to {{ schedule_data.total_delay_days }} day(s) slippage.
+        {% if schedule_data.slippage_days > 0 %}
+            <br><strong>Deadline Impact:</strong> Estimated delay pushes completion {{ schedule_data.slippage_days }} day(s) ({{ schedule_data.slippage_weeks }} weeks) beyond the approved deadline.
+        {% else %}
+            <br><strong>Deadline Status:</strong> Project completion remains within revised deadline limits ({{ schedule_data.revised_deadline_weeks }} weeks).
+        {% endif %}
+    </div>
+    {% endif %}
+
+    <!-- ACTIVITY FORM -->
+    <div class="subsection" style="border-top:0;padding-top:0;margin-top:0;">
+        <h3>{% if activity %}Update Activity{% else %}Add Activity{% endif %}</h3>
+
+        {% if projects %}
+        <form action="{{ url_for('save_activity') }}" method="POST">
+            <input type="hidden" name="activity_id" value="{{ activity.id if activity else '' }}">
+
+            <div class="form-grid">
+                <div>
+                    <label for="act_project_id">Project *</label>
+                    <select id="act_project_id" name="project_id" required>
+                        <option value="">Select a project</option>
+                        {% for p in projects %}
+                        <option value="{{ p.id }}" {% if (activity and activity.project_id == p.id) or (not activity and p.id == active_project_id) %}selected{% endif %}>{{ p.title }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div>
+                    <label for="act_wbs_id">Linked WBS Work Package (Optional)</label>
+                    <select id="act_wbs_id" name="wbs_id">
+                        <option value="">None (Independent Activity)</option>
+                        {% for w in wbs_items %}
+                        <option value="{{ w.id }}" {% if activity and activity.wbs_id == w.id %}selected{% endif %}>{{ w.wbs_code }} - {{ w.title }} ({{ w.item_type }})</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="full-width">
+                    <label for="act_title">Activity Name *</label>
+                    <input id="act_title" name="title" required value="{{ activity.title if activity else '' }}" placeholder="e.g. Patient Appointment Scheduling Module">
+                </div>
+
+                <div>
+                    <label for="act_assigned_to">Assigned Team Member / Role *</label>
+                    <select id="act_assigned_to" name="assigned_to" required>
+                        {% for role in [
+                            'Project Manager',
+                            'Backend Developer 1',
+                            'Backend Developer 2',
+                            'Frontend Developer 1',
+                            'Frontend Developer 2',
+                            'Database Developer',
+                            'Quality Assurance Engineer'
+                        ] %}
+                        <option value="{{ role }}" {% if activity and activity.assigned_to == role %}selected{% endif %}>{{ role }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div>
+                    <label for="act_predecessor">Task Dependency (Predecessor)</label>
+                    <select id="act_predecessor" name="predecessor_id">
+                        <option value="">None (Can start immediately)</option>
+                        {% for a in activities %}
+                            {% if not activity or a.id != activity.id %}
+                            <option value="{{ a.id }}" {% if activity and activity.predecessor_id == a.id %}selected{% endif %}>{{ a.id }}: {{ a.title }} (Ends: {{ a.end_date }})</option>
+                            {% endif %}
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div>
+                    <label for="act_duration_days">Estimated Duration (Days) *</label>
+                    <input id="act_duration_days" type="number" min="1" name="duration_days" required value="{{ activity.duration_days if activity else 14 }}">
+                </div>
+
+                <div>
+                    <label for="act_start_date">Start Date *</label>
+                    <input id="act_start_date" type="date" name="start_date" required value="{{ activity.start_date if activity else today }}">
+                </div>
+
+                <div>
+                    <label for="act_end_date">End Date *</label>
+                    <input id="act_end_date" type="date" name="end_date" required value="{{ activity.end_date if activity else today }}">
+                </div>
+
+                <div>
+                    <label for="act_status">Activity Status</label>
+                    <select id="act_status" name="status">
+                        {% for st in ['Not Started', 'In Progress', 'Completed', 'Delayed'] %}
+                        <option value="{{ st }}" {% if activity and activity.status == st %}selected{% endif %}>{{ st }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div>
+                    <label for="act_progress">Progress Completion (%)</label>
+                    <input id="act_progress" type="number" min="0" max="100" name="progress_percent" value="{{ activity.progress_percent if activity else 0 }}">
+                </div>
+
+                <div>
+                    <label for="act_delay_days">Delay Incurred (Days)</label>
+                    <input id="act_delay_days" type="number" min="0" name="delay_days" value="{{ activity.delay_days if activity else 0 }}">
+                </div>
+
+                <div>
+                    <label for="act_planned_cost">Planned Cost / Budget (PKR)</label>
+                    <input id="act_planned_cost" type="number" min="0" step="0.01" name="planned_cost" value="{{ activity.planned_cost if activity else 0 }}">
+                </div>
+
+                <div>
+                    <label for="act_actual_cost">Actual Expenditure (PKR)</label>
+                    <input id="act_actual_cost" type="number" min="0" step="0.01" name="actual_cost" value="{{ activity.actual_cost if activity else 0 }}">
+                </div>
+            </div>
+
+            <div class="form-actions">
+                <button class="btn" type="submit">{{ 'Update Activity' if activity else 'Save Activity' }}</button>
+                {% if activity %}
+                <a class="btn btn-light" href="{{ url_for('index', project_id=active_project_id) }}#schedule">Cancel Edit</a>
+                {% endif %}
+            </div>
+        </form>
+        {% else %}
+        <div class="empty-state">Create a project before defining schedule activities.</div>
+        {% endif %}
+    </div>
+
+    <!-- GANTT TIMELINE -->
+    <div class="subsection">
+        <h3>Gantt Schedule &amp; Milestone Timeline</h3>
+
+        {% if schedule_data and schedule_data.gantt_items %}
+        <div class="gantt-wrapper">
+            <div class="gantt-header-row">
+                <div>Activity &amp; Assignee</div>
+                <div class="gantt-timeline-header">
+                    <span>Week 1</span>
+                    <span>Week 4</span>
+                    <span>Week 8</span>
+                    <span>Week 12</span>
+                    <span>Week 16</span>
+                    {% if schedule_data.revised_deadline_weeks > 16 %}
+                    <span style="color:#b91c1c; font-weight:600;">Week {{ schedule_data.revised_deadline_weeks }}</span>
+                    {% endif %}
+                </div>
+            </div>
+
+            {% for item in schedule_data.gantt_items %}
+            <div class="gantt-item-row">
+                <div class="gantt-task-info" title="{{ item.title }} - {{ item.assigned_to }}">
+                    <strong>{{ item.id }}: {{ item.title }}</strong><br>
+                    <small class="muted">{{ item.assigned_to }} &bull; {{ item.duration_days }}d {% if item.delay_days > 0 %}<span style="color:#b91c1c;">(+{{ item.delay_days }}d)</span>{% endif %}</small>
+                </div>
+                <div class="gantt-track">
+                    <div class="gantt-bar {{ item.bar_class }}" style="left:{{ item.left_pct }}%; width:{{ item.width_pct }}%;">
+                        <div class="gantt-progress-fill" style="width:{{ item.progress_percent }}%;"></div>
+                        <span style="position:relative; z-index:2; padding:0 4px;">{{ item.progress_percent }}%</span>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+
+            <!-- Milestone Markers on Timeline -->
+            {% if schedule_data.milestones %}
+            <div style="margin-top:14px; padding-top:10px; border-top:1px dashed var(--border);">
+                <div style="font-size:11px; font-weight:600; color:#475569; margin-bottom:6px;">Milestones:</div>
+                <div style="position:relative; height:20px; background:#f8fafc; border:1px solid #cbd5e1; border-radius:4px;">
+                    {% for m in schedule_data.milestones %}
+                    <div style="position:absolute; left:{{ m.pct }}%; top:2px; transform:translateX(-50%); display:flex; flex-direction:column; align-items:center;" title="Milestone: {{ m.name }} (Week {{ m.due_week }}) - {{ m.status }}">
+                        <span class="milestone-diamond"></span>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            <div class="gantt-milestones-legend">
+                {% for m in schedule_data.milestones %}
+                <span class="milestone-marker-legend">
+                    <span class="milestone-diamond"></span>
+                    <strong>Week {{ m.due_week }}:</strong> {{ m.name }}
+                    <span class="tag {% if m.status == 'Completed' %}tag-completed{% else %}tag-pending{% endif %}" style="padding:1px 5px; font-size:10px;">{{ m.status }}</span>
+                </span>
+                {% endfor %}
+            </div>
+            {% endif %}
+
+            <div style="margin-top:14px; display:flex; gap:14px; flex-wrap:wrap; font-size:11px; color:#475569;">
+                <span><span class="tag tag-completed" style="padding:2px 6px;">Green</span> Completed</span>
+                <span><span class="tag tag-low" style="padding:2px 6px;">Blue</span> In Progress</span>
+                <span><span class="tag tag-delayed" style="padding:2px 6px;">Red</span> Delayed</span>
+                <span><span class="tag tag-notstarted" style="padding:2px 6px;">Gray</span> Not Started</span>
+            </div>
+        </div>
+        {% else %}
+        <div class="empty-state">No scheduled activities found for this project.</div>
+        {% endif %}
+    </div>
+
+    <!-- SCHEDULE ACTIVITIES TABLE -->
+    <div class="subsection">
+        <h3>Activities Register</h3>
+
+        {% if activities %}
+        <div class="table-responsive">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Activity Name</th>
+                        <th>Assignee</th>
+                        <th>Dates</th>
+                        <th>Predecessor</th>
+                        <th>Status</th>
+                        <th>Progress</th>
+                        <th>Delay</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for a in activities %}
+                    <tr>
+                        <td><strong>{{ a.id }}</strong></td>
+                        <td>
+                            <strong>{{ a.title }}</strong>
+                        </td>
+                        <td>{{ a.assigned_to }}</td>
+                        <td><small>{{ a.start_date }} to {{ a.end_date }} ({{ a.duration_days }}d)</small></td>
+                        <td>
+                            {% if a.predecessor_id %}
+                            <span class="tag tag-low">{{ a.predecessor_id }}: {{ a.predecessor_title or '' }}</span>
+                            {% else %}
+                            <span class="muted">-</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <span class="tag {% if a.status == 'Completed' %}tag-completed{% elif a.status == 'Delayed' %}tag-delayed{% elif a.status == 'In Progress' %}tag-in-progress{% else %}tag-notstarted{% endif %}">{{ a.status }}</span>
+                        </td>
+                        <td>
+                            <strong>{{ a.progress_percent }}%</strong>
+                        </td>
+                        <td>
+                            {% if a.delay_days > 0 %}
+                            <span style="color:#b91c1c; font-weight:600;">+{{ a.delay_days }}d</span>
+                            {% else %}
+                            <span style="color:#16a34a;">0d</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <div style="display:flex; gap:4px;">
+                                <a class="btn btn-secondary" style="padding:4px 7px; font-size:11px;" href="{{ url_for('index', project_id=active_project_id, edit_activity=a.id) }}#schedule">Edit</a>
+                                <form action="{{ url_for('delete_activity', activity_id=a.id) }}" method="POST" onsubmit="return confirm('Delete this activity?');" style="margin:0;">
+                                    <button class="btn btn-danger" style="padding:4px 7px; font-size:11px;" type="submit">Delete</button>
+                                </form>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="empty-state">No activities defined yet.</div>
+        {% endif %}
+    </div>
+</section>
+
+<!-- MODULE 9: COST MANAGEMENT AND EARNED VALUE ANALYSIS -->
+<section id="cost-evm">
+    <h2>9. Cost Management &amp; Earned Value Analysis (EVM)</h2>
+
+    <!-- EVM WARNING MESSAGES -->
+    {% if evm_data and evm_data.warnings %}
+        {% for w in evm_data.warnings %}
+        <div class="alert-box {{ w.level }}">
+            <strong>{{ w.title }}:</strong> {{ w.message }}
+        </div>
+        {% endfor %}
+    {% else %}
+    <div class="alert-box success">
+        <strong>Cost &amp; Schedule Performance:</strong> Indicators are within normal thresholds.
+    </div>
+    {% endif %}
+
+    <!-- EVM INDICATOR TILES -->
+    <div class="evm-grid">
+        <div class="evm-card">
+            <p class="evm-label">Planned Value (PV)</p>
+            <p class="evm-value">PKR {{ "{:,.2f}".format(evm_data.pv or 0) }}</p>
+            <p class="evm-desc">Scheduled budget to date</p>
+        </div>
+
+        <div class="evm-card">
+            <p class="evm-label">Earned Value (EV)</p>
+            <p class="evm-value">PKR {{ "{:,.2f}".format(evm_data.ev or 0) }}</p>
+            <p class="evm-desc">Budgeted value of completed work</p>
+        </div>
+
+        <div class="evm-card">
+            <p class="evm-label">Actual Cost (AC)</p>
+            <p class="evm-value">PKR {{ "{:,.2f}".format(evm_data.ac or 0) }}</p>
+            <p class="evm-desc">Actual expenditure incurred</p>
+        </div>
+
+        <div class="evm-card">
+            <p class="evm-label">Cost Performance Index (CPI)</p>
+            <p class="evm-value" style="color:{% if evm_data.cpi and evm_data.cpi >= 1.0 %}#15803d{% else %}#b91c1c{% endif %};">{{ "%.2f"|format(evm_data.cpi or 1.0) }}</p>
+            <p class="evm-desc">EV / AC {% if evm_data.cpi and evm_data.cpi >= 1.0 %}(Under Budget){% else %}(Cost Overrun){% endif %}</p>
+        </div>
+
+        <div class="evm-card">
+            <p class="evm-label">Schedule Performance Index (SPI)</p>
+            <p class="evm-value" style="color:{% if evm_data.spi and evm_data.spi >= 1.0 %}#15803d{% else %}#b91c1c{% endif %};">{{ "%.2f"|format(evm_data.spi or 1.0) }}</p>
+            <p class="evm-desc">EV / PV {% if evm_data.spi and evm_data.spi >= 1.0 %}(On Schedule){% else %}(Behind Schedule){% endif %}</p>
+        </div>
+
+        <div class="evm-card">
+            <p class="evm-label">Estimate at Completion (EAC)</p>
+            <p class="evm-value">PKR {{ "{:,.2f}".format(evm_data.eac or 0) }}</p>
+            <p class="evm-desc">BAC / CPI</p>
+        </div>
+    </div>
+
+    <!-- BUDGET RECONCILIATION SUMMARY -->
+    <div class="subsection">
+        <h3>Budget &amp; Variance Summary</h3>
+        <div class="cards">
+            <div class="item-card">
+                <h4>Budget Structure</h4>
+                <p><strong>Baseline Approved Budget:</strong> PKR {{ "{:,.2f}".format(evm_data.baseline_budget or 0) }}</p>
+                <p><strong>Approved Changes Cost:</strong> +PKR {{ "{:,.2f}".format(evm_data.approved_changes_cost or 0) }}</p>
+                <p><strong>Revised Authorized Budget:</strong> <span style="font-weight:700; color:var(--primary);">PKR {{ "{:,.2f}".format(evm_data.revised_budget or 0) }}</span></p>
+                <p><strong>Planned Activity Budget (BAC):</strong> PKR {{ "{:,.2f}".format(evm_data.bac or 0) }}</p>
+            </div>
+
+            <div class="item-card">
+                <h4>Variances</h4>
+                <p><strong>Cost Variance (CV):</strong>
+                    <span style="font-weight:600; color:{% if evm_data.cv and evm_data.cv >= 0 %}#15803d{% else %}#b91c1c{% endif %};">
+                        PKR {{ "{:,.2f}".format(evm_data.cv or 0) }}
+                    </span>
+                </p>
+                <p><strong>Schedule Variance (SV):</strong>
+                    <span style="font-weight:600; color:{% if evm_data.sv and evm_data.sv >= 0 %}#15803d{% else %}#b91c1c{% endif %};">
+                        PKR {{ "{:,.2f}".format(evm_data.sv or 0) }}
+                    </span>
+                </p>
+                <p><strong>Variance at Completion (VAC):</strong>
+                    <span style="font-weight:600; color:{% if evm_data.vac and evm_data.vac >= 0 %}#15803d{% else %}#b91c1c{% endif %};">
+                        PKR {{ "{:,.2f}".format(evm_data.vac or 0) }}
+                    </span>
+                </p>
+                <p><strong>Expenditure Burn:</strong>
+                    {{ "%.1f"|format((evm_data.ac / evm_data.revised_budget * 100) if evm_data.revised_budget else 0) }}% spent
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <!-- ACTIVITY COST BREAKDOWN TABLE -->
+    <div class="subsection">
+        <h3>Activity Cost Breakdown</h3>
+        {% if activities %}
+        <div class="table-responsive">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Activity</th>
+                        <th>Planned Cost (PKR)</th>
+                        <th>Actual Expenditure (PKR)</th>
+                        <th>Progress</th>
+                        <th>Earned Value (PKR)</th>
+                        <th>Cost Variance (PKR)</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for a in activities %}
+                    {% set act_ev = (a.planned_cost or 0) * (a.progress_percent / 100.0) %}
+                    {% set act_cv = act_ev - (a.actual_cost or 0) %}
+                    <tr>
+                        <td><strong>{{ a.title }}</strong><br><small class="muted">{{ a.assigned_to }}</small></td>
+                        <td>{{ "{:,.2f}".format(a.planned_cost or 0) }}</td>
+                        <td>{{ "{:,.2f}".format(a.actual_cost or 0) }}</td>
+                        <td>{{ a.progress_percent }}%</td>
+                        <td>{{ "{:,.2f}".format(act_ev) }}</td>
+                        <td style="color:{% if act_cv >= 0 %}#15803d{% else %}#b91c1c{% endif %}; font-weight:600;">
+                            {{ "{:,.2f}".format(act_cv) }}
+                        </td>
+                        <td>
+                            <span class="tag {% if a.status == 'Completed' %}tag-completed{% elif a.status == 'Delayed' %}tag-delayed{% elif a.status == 'In Progress' %}tag-in-progress{% else %}tag-notstarted{% endif %}">{{ a.status }}</span>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="empty-state">No cost records logged yet.</div>
+        {% endif %}
+    </div>
+</section>
+
+<!-- MODULE 10: QUALITY MANAGEMENT AND RISK CONTROL -->
+<section id="quality-risk">
+    <h2>10. Quality Management &amp; Risk Control</h2>
+
+    <!-- DEFECT NOTIFICATION -->
+    {% if qr_data and qr_data.unresolved_critical_count > 0 %}
+    <div class="alert-box critical">
+        <strong>Critical Defects:</strong> {{ qr_data.unresolved_critical_count }} unresolved critical defect(s) pending resolution.
+    </div>
+    {% endif %}
+
+    <!-- DEFECT TRACKING -->
+    <div class="subsection" style="border-top:0;padding-top:0;margin-top:0;">
+        <h3>Defect Tracking</h3>
+
+        {% if projects %}
+        <form action="{{ url_for('save_defect') }}" method="POST">
+            <input type="hidden" name="defect_id" value="{{ defect.id if defect else '' }}">
+
+            <div class="form-grid">
+                <div>
+                    <label for="def_project_id">Project *</label>
+                    <select id="def_project_id" name="project_id" required>
+                        <option value="">Select a project</option>
+                        {% for p in projects %}
+                        <option value="{{ p.id }}" {% if (defect and defect.project_id == p.id) or (not defect and p.id == active_project_id) %}selected{% endif %}>{{ p.title }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div>
+                    <label for="def_module">Module Affected *</label>
+                    <select id="def_module" name="module_affected" required>
+                        {% for mod in [
+                            'Patient Appointment Scheduling',
+                            'Patient Record Management',
+                            'Laboratory Reports Module',
+                            'Doctor Schedules & Availability',
+                            'Online Consultations & Chat',
+                            'Hospital Billing & Invoicing',
+                            'AI-Based Preliminary Diagnosis',
+                            'Mobile Application'
+                        ] %}
+                        <option value="{{ mod }}" {% if defect and defect.module_affected == mod %}selected{% endif %}>{{ mod }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="full-width">
+                    <label for="def_title">Defect Title *</label>
+                    <input id="def_title" name="title" required value="{{ defect.title if defect else '' }}" placeholder="e.g. Appointment double-booking defect">
+                </div>
+
+                <div class="full-width">
+                    <label for="def_description">Defect Description *</label>
+                    <textarea id="def_description" name="description" required placeholder="Describe the defect, steps to reproduce, and impact">{{ defect.description if defect else '' }}</textarea>
+                </div>
+
+                <div>
+                    <label for="def_severity">Severity Level *</label>
+                    <select id="def_severity" name="severity" required>
+                        {% for sev in ['Critical', 'Major', 'Minor', 'Low'] %}
+                        <option value="{{ sev }}" {% if defect and defect.severity == sev %}selected{% endif %}>{{ sev }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div>
+                    <label for="def_assigned_to">Assigned Personnel</label>
+                    <select id="def_assigned_to" name="assigned_to">
+                        {% for role in [
+                            'Quality Assurance Engineer',
+                            'Backend Developer 1',
+                            'Backend Developer 2',
+                            'Database Developer',
+                            'Frontend Developer 1',
+                            'Frontend Developer 2',
+                            'Project Manager'
+                        ] %}
+                        <option value="{{ role }}" {% if defect and defect.assigned_to == role %}selected{% endif %}>{{ role }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div>
+                    <label for="def_status">Resolution Status</label>
+                    <select id="def_status" name="status">
+                        {% for st in ['Open', 'In Progress', 'Resolved', 'Closed'] %}
+                        <option value="{{ st }}" {% if defect and defect.status == st %}selected{% endif %}>{{ st }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div>
+                    <label for="def_resolution">Resolution Notes</label>
+                    <textarea id="def_resolution" name="resolution_notes" placeholder="Notes on fix, test results, or workarounds">{{ defect.resolution_notes if defect else '' }}</textarea>
+                </div>
+            </div>
+
+            <div class="form-actions">
+                <button class="btn" type="submit">{{ 'Update Defect' if defect else 'Log Defect' }}</button>
+                {% if defect %}
+                <a class="btn btn-light" href="{{ url_for('index', project_id=active_project_id) }}#quality-risk">Cancel Edit</a>
+                {% endif %}
+            </div>
+        </form>
+        {% endif %}
+
+        <div style="margin-top:16px;">
+            <h4>Logged Defects</h4>
+            {% if defects %}
+            <div class="cards">
+                {% for d in defects %}
+                <article class="item-card">
+                    <h3>{{ d.title }}</h3>
+                    <p><strong>Module:</strong> {{ d.module_affected }}</p>
+                    <p><strong>Severity:</strong>
+                        <span class="tag {% if d.severity == 'Critical' %}tag-critical{% elif d.severity == 'Major' %}tag-high{% elif d.severity == 'Minor' %}tag-low{% else %}tag-notstarted{% endif %}">{{ d.severity }}</span>
+                    </p>
+                    <p><strong>Status:</strong>
+                        <span class="tag {% if d.status == 'Resolved' or d.status == 'Closed' %}tag-completed{% elif d.status == 'In Progress' %}tag-in-progress{% else %}tag-rejected{% endif %}">{{ d.status }}</span>
+                    </p>
+                    <p><strong>Assigned To:</strong> {{ d.assigned_to or 'Unassigned' }}</p>
+                    <p><strong>Description:</strong> {{ d.description }}</p>
+                    {% if d.resolution_notes %}
+                    <p class="review-comments"><strong>Resolution Notes:</strong><br>{{ d.resolution_notes }}</p>
+                    {% endif %}
+
+                    <div class="review-box">
+                        <form action="{{ url_for('defect_status', defect_id=d.id) }}" method="POST">
+                            <div style="display:flex; gap:6px; align-items:center;">
+                                <select name="status" style="max-width:130px; padding:5px;">
+                                    {% for st in ['Open', 'In Progress', 'Resolved', 'Closed'] %}
+                                    <option value="{{ st }}" {% if d.status == st %}selected{% endif %}>{{ st }}</option>
+                                    {% endfor %}
+                                </select>
+                                <input name="resolution_notes" value="{{ d.resolution_notes or '' }}" placeholder="Notes" style="padding:5px;">
+                                <button class="btn btn-success" type="submit" style="padding:5px 9px; font-size:11px;">Update</button>
+                            </div>
+                        </form>
+                    </div>
+
+                    <div class="form-actions" style="margin-top:8px;">
+                        <a class="btn btn-secondary" style="padding:5px 9px; font-size:11px;" href="{{ url_for('index', project_id=active_project_id, edit_defect=d.id) }}#quality-risk">Edit</a>
+                        <form action="{{ url_for('delete_defect', defect_id=d.id) }}" method="POST" onsubmit="return confirm('Delete this defect?');" style="margin:0;">
+                            <button class="btn btn-danger" style="padding:5px 9px; font-size:11px;" type="submit">Delete</button>
+                        </form>
+                    </div>
+                </article>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="empty-state">No defects logged for this project.</div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- QUALITY CHECKLIST -->
+    <div class="subsection">
+        <h3>Quality Checklist</h3>
+
+        {% if projects %}
+        <form action="{{ url_for('save_quality_check') }}" method="POST">
+            <input type="hidden" name="check_id" value="{{ quality_check.id if quality_check else '' }}">
+
+            <div class="form-grid">
+                <div>
+                    <label for="qc_project_id">Project *</label>
+                    <select id="qc_project_id" name="project_id" required>
+                        {% for p in projects %}
+                        <option value="{{ p.id }}" {% if (quality_check and quality_check.project_id == p.id) or (not quality_check and p.id == active_project_id) %}selected{% endif %}>{{ p.title }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div>
+                    <label for="qc_deliverable">Deliverable / Work Package *</label>
+                    <input id="qc_deliverable" name="deliverable_name" required value="{{ quality_check.deliverable_name if quality_check else '' }}" placeholder="e.g. Patient Appointment Scheduling">
+                </div>
+
+                <div class="full-width">
+                    <label for="qc_item">Verification Criteria *</label>
+                    <input id="qc_item" name="check_item" required value="{{ quality_check.check_item if quality_check else '' }}" placeholder="e.g. Concurrency stress test">
+                </div>
+
+                <div>
+                    <label for="qc_status">Inspection Status</label>
+                    <select id="qc_status" name="inspection_status">
+                        {% for st in ['Pending', 'Passed', 'Failed', 'In Progress'] %}
+                        <option value="{{ st }}" {% if quality_check and quality_check.inspection_status == st %}selected{% endif %}>{{ st }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div>
+                    <label for="qc_inspected_by">Inspected By</label>
+                    <input id="qc_inspected_by" name="inspected_by" value="{{ quality_check.inspected_by if quality_check else 'Quality Assurance Engineer' }}">
+                </div>
+
+                <div class="full-width">
+                    <label for="qc_remarks">Inspection Remarks</label>
+                    <textarea id="qc_remarks" name="remarks" placeholder="Observations and findings">{{ quality_check.remarks if quality_check else '' }}</textarea>
+                </div>
+            </div>
+
+            <div class="form-actions">
+                <button class="btn" type="submit">{{ 'Update Check Item' if quality_check else 'Add Checklist Item' }}</button>
+                {% if quality_check %}
+                <a class="btn btn-light" href="{{ url_for('index', project_id=active_project_id) }}#quality-risk">Cancel Edit</a>
+                {% endif %}
+            </div>
+        </form>
+        {% endif %}
+
+        <div style="margin-top:16px;">
+            <h4>Checklist Records</h4>
+            {% if quality_checks %}
+            <div class="table-responsive">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Deliverable</th>
+                            <th>Criteria</th>
+                            <th>Status</th>
+                            <th>Inspected By</th>
+                            <th>Inspection Date</th>
+                            <th>Remarks</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for qc in quality_checks %}
+                        <tr>
+                            <td><strong>{{ qc.deliverable_name }}</strong></td>
+                            <td>{{ qc.check_item }}</td>
+                            <td>
+                                <span class="tag {% if qc.inspection_status == 'Passed' %}tag-passed{% elif qc.inspection_status == 'Failed' %}tag-failed{% else %}tag-pending{% endif %}">
+                                    {{ qc.inspection_status }}
+                                </span>
+                            </td>
+                            <td>{{ qc.inspected_by or 'Pending' }}</td>
+                            <td>{{ qc.inspection_date or '-' }}</td>
+                            <td><small>{{ qc.remarks or '-' }}</small></td>
+                            <td>
+                                <div style="display:flex; gap:4px;">
+                                    <form action="{{ url_for('quality_check_status', check_id=qc.id) }}" method="POST" style="margin:0;">
+                                        <input type="hidden" name="inspection_status" value="Passed">
+                                        <input type="hidden" name="inspected_by" value="Quality Assurance Engineer">
+                                        <input type="hidden" name="remarks" value="Verified and passed">
+                                        <button class="btn btn-success" style="padding:3px 6px; font-size:11px;" type="submit" title="Mark Passed">Pass</button>
+                                    </form>
+                                    <form action="{{ url_for('quality_check_status', check_id=qc.id) }}" method="POST" style="margin:0;">
+                                        <input type="hidden" name="inspection_status" value="Failed">
+                                        <input type="hidden" name="inspected_by" value="Quality Assurance Engineer">
+                                        <input type="hidden" name="remarks" value="Failed inspection">
+                                        <button class="btn btn-danger" style="padding:3px 6px; font-size:11px;" type="submit" title="Mark Failed">Fail</button>
+                                    </form>
+                                    <form action="{{ url_for('delete_quality_check', check_id=qc.id) }}" method="POST" onsubmit="return confirm('Delete this checklist item?');" style="margin:0;">
+                                        <button class="btn btn-light" style="padding:3px 6px; font-size:11px;" type="submit">Del</button>
+                                    </form>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="empty-state">No quality checklist items recorded.</div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- RISK PRIORITIZATION MATRIX -->
+    <div class="subsection">
+        <h3>Risk Prioritization Matrix</h3>
+
+        {% if projects %}
+        <form action="{{ url_for('save_risk') }}" method="POST">
+            <input type="hidden" name="risk_id" value="{{ risk.id if risk else '' }}">
+
+            <div class="form-grid">
+                <div>
+                    <label for="r_project_id">Project *</label>
+                    <select id="r_project_id" name="project_id" required>
+                        {% for p in projects %}
+                        <option value="{{ p.id }}" {% if (risk and risk.project_id == p.id) or (not risk and p.id == active_project_id) %}selected{% endif %}>{{ p.title }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div>
+                    <label for="r_category">Risk Category</label>
+                    <select id="r_category" name="category">
+                        {% for cat in ['Technical', 'Schedule', 'Cost', 'Scope', 'Quality'] %}
+                        <option value="{{ cat }}" {% if risk and risk.category == cat %}selected{% endif %}>{{ cat }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="full-width">
+                    <label for="r_title">Risk Title / Description *</label>
+                    <input id="r_title" name="title" required value="{{ risk.title if risk else '' }}" placeholder="e.g. Multi-hospital network latency">
+                </div>
+
+                <div>
+                    <label for="r_likelihood">Likelihood (1: Rare to 5: Almost Certain) *</label>
+                    <select id="r_likelihood" name="likelihood" required>
+                        <option value="1" {% if risk and risk.likelihood == 1 %}selected{% endif %}>1 - Rare (&lt; 10%)</option>
+                        <option value="2" {% if risk and risk.likelihood == 2 %}selected{% endif %}>2 - Unlikely (10% - 30%)</option>
+                        <option value="3" {% if not risk or risk.likelihood == 3 %}selected{% endif %}>3 - Possible (30% - 60%)</option>
+                        <option value="4" {% if risk and risk.likelihood == 4 %}selected{% endif %}>4 - Likely (60% - 85%)</option>
+                        <option value="5" {% if risk and risk.likelihood == 5 %}selected{% endif %}>5 - Almost Certain (&gt; 85%)</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label for="r_impact">Impact (1: Negligible to 5: Severe) *</label>
+                    <select id="r_impact" name="impact" required>
+                        <option value="1" {% if risk and risk.impact == 1 %}selected{% endif %}>1 - Negligible</option>
+                        <option value="2" {% if risk and risk.impact == 2 %}selected{% endif %}>2 - Minor</option>
+                        <option value="3" {% if not risk or risk.impact == 3 %}selected{% endif %}>3 - Moderate</option>
+                        <option value="4" {% if risk and risk.impact == 4 %}selected{% endif %}>4 - Major</option>
+                        <option value="5" {% if risk and risk.impact == 5 %}selected{% endif %}>5 - Severe</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label for="r_status">Risk Status</label>
+                    <select id="r_status" name="status">
+                        {% for st in ['Open', 'Mitigating', 'Closed'] %}
+                        <option value="{{ st }}" {% if risk and risk.status == st %}selected{% endif %}>{{ st }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="full-width">
+                    <label for="r_mitigation">Mitigation Strategy</label>
+                    <textarea id="r_mitigation" name="mitigation_strategy" placeholder="Preventive controls and contingency plans">{{ risk.mitigation_strategy if risk else '' }}</textarea>
+                </div>
+            </div>
+
+            <div class="form-actions">
+                <button class="btn" type="submit">{{ 'Update Risk' if risk else 'Add Risk' }}</button>
+                {% if risk %}
+                <a class="btn btn-light" href="{{ url_for('index', project_id=active_project_id) }}#quality-risk">Cancel Edit</a>
+                {% endif %}
+            </div>
+        </form>
+        {% endif %}
+
+        <!-- 5x5 HEAT MAP MATRIX -->
+        <div class="risk-matrix-wrapper">
+            <h4>Risk Matrix Grid</h4>
+            <table class="risk-matrix-table">
+                <thead>
+                    <tr>
+                        <th style="width:30px;"></th>
+                        <th style="width:110px;">Likelihood \ Impact</th>
+                        <th>1 - Negligible</th>
+                        <th>2 - Minor</th>
+                        <th>3 - Moderate</th>
+                        <th>4 - Major</th>
+                        <th>5 - Severe</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for l in [5, 4, 3, 2, 1] %}
+                    <tr>
+                        {% if l == 5 %}
+                        <td rowspan="5" class="matrix-y-axis">LIKELIHOOD</td>
+                        {% endif %}
+                        <th style="background:#f8fafc; font-size:11px;">
+                            {{ l }} - {% if l == 5 %}Almost Certain{% elif l == 4 %}Likely{% elif l == 3 %}Possible{% elif l == 2 %}Unlikely{% else %}Rare{% endif %}
+                        </th>
+                        {% for imp in [1, 2, 3, 4, 5] %}
+                        {% set cell = qr_data.matrix_cells.get((l, imp)) if qr_data else None %}
+                        <td class="matrix-cell {{ cell.class if cell else 'cell-low' }}">
+                            <div style="font-weight:600; color:#64748b; margin-bottom:2px;">Score: {{ l * imp }}</div>
+                            {% if cell and cell.risks %}
+                                {% for r in cell.risks %}
+                                <span class="risk-pill" title="{{ r.title }} ({{ r.category }}) - Status: {{ r.status }}">
+                                    &bull; {{ r.title }}
+                                </span>
+                                {% endfor %}
+                            {% endif %}
+                        </td>
+                        {% endfor %}
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+
+            <div style="margin-top:10px; display:flex; gap:12px; flex-wrap:wrap; font-size:11px; color:#475569;">
+                <span><span class="tag tag-critical-risk" style="padding:2px 6px;">Red</span> Critical (15-25)</span>
+                <span><span class="tag tag-high-risk" style="padding:2px 6px;">Orange</span> High (10-14)</span>
+                <span><span class="tag tag-medium-risk" style="padding:2px 6px;">Yellow</span> Medium (5-9)</span>
+                <span><span class="tag tag-low-risk" style="padding:2px 6px;">Green</span> Low (1-4)</span>
+            </div>
+        </div>
+
+        <!-- RISK REGISTER LIST -->
+        <div style="margin-top:16px;">
+            <h4>Registered Risks</h4>
+            {% if risks %}
+            <div class="cards">
+                {% for r in risks %}
+                <article class="item-card">
+                    <h3>{{ r.title }}</h3>
+                    <p><strong>Category:</strong> {{ r.category }}</p>
+                    <p><strong>Likelihood &times; Impact:</strong> {{ r.likelihood }} &times; {{ r.impact }} = <strong>{{ r.risk_score }}</strong></p>
+                    <p><strong>Priority:</strong>
+                        <span class="tag {% if r.priority_level == 'Critical' %}tag-critical-risk{% elif r.priority_level == 'High' %}tag-high-risk{% elif r.priority_level == 'Medium' %}tag-medium-risk{% else %}tag-low-risk{% endif %}">
+                            {{ r.priority_level }} (Rank {{ r.risk_score }})
+                        </span>
+                    </p>
+                    <p><strong>Status:</strong> <span class="tag">{{ r.status }}</span></p>
+                    <p><strong>Mitigation Strategy:</strong> {{ r.mitigation_strategy or 'None specified' }}</p>
+
+                    <div class="form-actions" style="margin-top:8px;">
+                        <a class="btn btn-secondary" style="padding:5px 9px; font-size:11px;" href="{{ url_for('index', project_id=active_project_id, edit_risk=r.id) }}#quality-risk">Edit</a>
+                        <form action="{{ url_for('delete_risk', risk_id=r.id) }}" method="POST" onsubmit="return confirm('Delete this risk record?');" style="margin:0;">
+                            <button class="btn btn-danger" style="padding:5px 9px; font-size:11px;" type="submit">Delete</button>
+                        </form>
+                    </div>
+                </article>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="empty-state">No risks recorded.</div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- PROCESS DECISION PROGRAM CHART (PDPC) -->
+    <div class="subsection">
+        <h3>Process Decision Program Chart (PDPC)</h3>
+
+        {% if projects %}
+        <form action="{{ url_for('save_pdpc') }}" method="POST">
+            <input type="hidden" name="pdpc_id" value="{{ pdpc_item.id if pdpc_item else '' }}">
+
+            <div class="form-grid">
+                <div>
+                    <label for="pdpc_project_id">Project *</label>
+                    <select id="pdpc_project_id" name="project_id" required>
+                        {% for p in projects %}
+                        <option value="{{ p.id }}" {% if (pdpc_item and pdpc_item.project_id == p.id) or (not pdpc_item and p.id == active_project_id) %}selected{% endif %}>{{ p.title }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div>
+                    <label for="pdpc_step">Process Phase / Step *</label>
+                    <input id="pdpc_step" name="process_step" required value="{{ pdpc_item.process_step if pdpc_item else '' }}" placeholder="e.g. Hospital Network Deployment">
+                </div>
+
+                <div class="full-width">
+                    <label for="pdpc_problem">Potential Problem *</label>
+                    <input id="pdpc_problem" name="potential_problem" required value="{{ pdpc_item.potential_problem if pdpc_item else '' }}" placeholder="e.g. Network latency between hospitals">
+                </div>
+
+                <div class="full-width">
+                    <label for="pdpc_counter">Countermeasure (Preventive / Corrective Action) *</label>
+                    <textarea id="pdpc_counter" name="countermeasure" required placeholder="Describe countermeasure">{{ pdpc_item.countermeasure if pdpc_item else '' }}</textarea>
+                </div>
+
+                <div>
+                    <label for="pdpc_type">Action Type</label>
+                    <select id="pdpc_type" name="action_type">
+                        <option value="Preventive" {% if pdpc_item and pdpc_item.action_type == 'Preventive' %}selected{% endif %}>Preventive</option>
+                        <option value="Corrective" {% if pdpc_item and pdpc_item.action_type == 'Corrective' %}selected{% endif %}>Corrective</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label for="pdpc_status">Plan Status</label>
+                    <select id="pdpc_status" name="status">
+                        <option value="Selected" {% if not pdpc_item or pdpc_item.status == 'Selected' %}selected{% endif %}>Selected Plan</option>
+                        <option value="Backup Plan" {% if pdpc_item and pdpc_item.status == 'Backup Plan' %}selected{% endif %}>Backup Plan</option>
+                        <option value="Rejected" {% if pdpc_item and pdpc_item.status == 'Rejected' %}selected{% endif %}>Rejected</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="form-actions">
+                <button class="btn" type="submit">{{ 'Update PDPC Item' if pdpc_item else 'Add PDPC Item' }}</button>
+                {% if pdpc_item %}
+                <a class="btn btn-light" href="{{ url_for('index', project_id=active_project_id) }}#quality-risk">Cancel Edit</a>
+                {% endif %}
+            </div>
+        </form>
+        {% endif %}
+
+        <!-- PDPC STRUCTURED VIEW -->
+        <div style="margin-top:16px;">
+            <h4>Contingency Responses</h4>
+            {% if qr_data and qr_data.pdpc_grouped %}
+            <div class="pdpc-container">
+                {% for step, items in qr_data.pdpc_grouped.items() %}
+                <div class="pdpc-card">
+                    <h4 style="margin:0 0 8px; color:#1e40af; font-size:14px;">Phase: {{ step }}</h4>
+                    {% for item in items %}
+                    <div class="pdpc-branch">
+                        <div>
+                            <strong style="color:#b91c1c;">Problem:</strong> {{ item.potential_problem }}
+                        </div>
+                        <div>
+                            <strong style="color:#15803d;">Action:</strong> {{ item.countermeasure }} (<em>{{ item.action_type }}</em>)
+                        </div>
+                        <div style="text-align:right;">
+                            {% if item.status == 'Selected' %}
+                            <span class="pdpc-tag-selected">&#10003; Selected</span>
+                            {% elif item.status == 'Backup Plan' %}
+                            <span class="pdpc-tag-backup">&#8635; Backup</span>
+                            {% else %}
+                            <span class="pdpc-tag-rejected">&#10007; Rejected</span>
+                            {% endif %}
+                            <form action="{{ url_for('delete_pdpc', pdpc_id=item.id) }}" method="POST" onsubmit="return confirm('Delete this PDPC branch?');" style="display:inline; margin-left:4px;">
+                                <button class="btn btn-light" style="padding:2px 5px; font-size:10px;" type="submit">&times;</button>
+                            </form>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="empty-state">No PDPC items defined.</div>
+            {% endif %}
+        </div>
+    </div>
+</section>
+
+<!-- MODULE 11: PROJECT DASHBOARD & REPORTS -->
+<section id="dashboard">
+    <h2>11. Project Dashboard &amp; Reports</h2>
+
+    {% if dashboard_data %}
+    <!-- KPI SUMMARY CARDS -->
+    <div class="change-summary">
+        <div class="summary-card">
+            <p class="summary-label">Overall Progress</p>
+            <p class="summary-number" style="color:var(--primary);">{{ dashboard_data.overall_progress }}%</p>
+            <div class="progress-container">
+                <div class="progress-fill" style="width:{{ dashboard_data.overall_progress }}%;"></div>
+            </div>
+        </div>
+
+        <div class="summary-card">
+            <p class="summary-label">Pending Change Requests</p>
+            <p class="summary-number" style="color:var(--orange);">{{ dashboard_data.pending_crs_count }}</p>
+            <p class="muted" style="margin:4px 0 0; font-size:11px;">Awaiting decision</p>
+        </div>
+
+        <div class="summary-card">
+            <p class="summary-label">Delayed Activities</p>
+            <p class="summary-number" style="color:#b91c1c;">{{ dashboard_data.delayed_count }}</p>
+            <p class="muted" style="margin:4px 0 0; font-size:11px;">Tasks with delay</p>
+        </div>
+
+        <div class="summary-card">
+            <p class="summary-label">Unresolved Critical Defects</p>
+            <p class="summary-number" style="color:{% if dashboard_data.unresolved_critical_count > 0 %}#b91c1c{% else %}#15803d{% endif %};">
+                {{ dashboard_data.unresolved_critical_count }}
+            </p>
+            <p class="muted" style="margin:4px 0 0; font-size:11px;">Open critical issues</p>
+        </div>
+    </div>
+
+    <!-- OVERALL PROJECT HEALTH BADGE -->
+    <div style="background:white; border:1px solid var(--border); border-radius:8px; padding:14px 18px; margin:16px 0; display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:10px;">
+        <div>
+            <h3 style="margin:0 0 2px; font-size:15px;">Project Health Status</h3>
+            <p style="margin:0; font-size:12px; color:var(--muted);">Overall project health based on schedule, budget, quality, and change requests</p>
+        </div>
+        <div>
+            <span class="tag {{ dashboard_data.health_class }}" style="font-size:13px; padding:5px 12px;">
+                {{ dashboard_data.health_status }}
+            </span>
+        </div>
+    </div>
+
+    <!-- EXECUTIVE REPORT SUMMARY TABLE -->
+    <div class="subsection">
+        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
+            <h3>Project Status Summary Report</h3>
+            <button class="btn btn-secondary" onclick="window.print()" style="font-size:11px; padding:5px 10px;">Print / Export Report</button>
+        </div>
+
+        <div class="table-responsive">
+            <table class="data-table">
+                <tbody>
+                    <tr>
+                        <th style="width:220px;">Project Title:</th>
+                        <td><strong>{{ active_project.title if active_project else 'Smart Healthcare Project' }}</strong></td>
+                        <th style="width:180px;">Project Status:</th>
+                        <td><span class="tag">{{ active_project.status if active_project else 'Planning' }}</span></td>
+                    </tr>
+                    <tr>
+                        <th>Approved Baseline Budget:</th>
+                        <td>PKR {{ "{:,.2f}".format(active_project.approved_budget or 0) if active_project else '0.00' }}</td>
+                        <th>Approved Changes Cost:</th>
+                        <td>+PKR {{ "{:,.2f}".format(change_impact_data.approved_crs_cost or 0) if change_impact_data else '0.00' }}</td>
+                    </tr>
+                    <tr>
+                        <th>Revised Project Budget:</th>
+                        <td><strong>PKR {{ "{:,.2f}".format(change_impact_data.revised_budget or 0) if change_impact_data else '0.00' }}</strong></td>
+                        <th>Actual Expenditure (AC):</th>
+                        <td style="color:{% if evm_data.ac and change_impact_data and evm_data.ac > change_impact_data.revised_budget %}#b91c1c{% else %}#15803d{% endif %}; font-weight:600;">
+                            PKR {{ "{:,.2f}".format(evm_data.ac or 0) }}
+                        </td>
+                    </tr>
+                    <tr>
+                        <th>Baseline Deadline:</th>
+                        <td>{{ active_project.deadline_weeks if active_project else 16 }} weeks ({{ (active_project.deadline_weeks or 16) * 7 }} days)</td>
+                        <th>Revised Target Deadline:</th>
+                        <td><strong>{{ change_impact_data.revised_weeks if change_impact_data else 16 }} weeks</strong> (+{{ change_impact_data.approved_crs_days or 0 }} days approved extension)</td>
+                    </tr>
+                    <tr>
+                        <th>Cost Performance Index (CPI):</th>
+                        <td>
+                            <strong style="color:{% if evm_data.cpi and evm_data.cpi >= 1.0 %}#15803d{% else %}#b91c1c{% endif %};">
+                                {{ "%.2f"|format(evm_data.cpi or 1.0) }}
+                            </strong>
+                            <small class="muted">({% if evm_data.cpi and evm_data.cpi >= 1.0 %}Under Budget{% else %}Cost Overrun{% endif %})</small>
+                        </td>
+                        <th>Schedule Performance Index (SPI):</th>
+                        <td>
+                            <strong style="color:{% if evm_data.spi and evm_data.spi >= 1.0 %}#15803d{% else %}#b91c1c{% endif %};">
+                                {{ "%.2f"|format(evm_data.spi or 1.0) }}
+                            </strong>
+                            <small class="muted">({% if evm_data.spi and evm_data.spi >= 1.0 %}On Schedule{% else %}Behind Schedule{% endif %})</small>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th>Pending Change Requests:</th>
+                        <td>
+                            {% if dashboard_data.pending_crs %}
+                                <span class="tag tag-pending">{{ dashboard_data.pending_crs_count }} Pending</span>
+                                <ul style="margin:4px 0 0; padding-left:16px; font-size:12px;">
+                                    {% for pcr in dashboard_data.pending_crs %}
+                                    <li>{{ pcr.title }} (PKR {{ "%.0f"|format(pcr.cost_impact or 0) }}, +{{ pcr.schedule_impact_days }}d)</li>
+                                    {% endfor %}
+                                </ul>
+                            {% else %}
+                                <span style="color:#15803d;">None pending</span>
+                            {% endif %}
+                        </td>
+                        <th>Delayed Activities:</th>
+                        <td>
+                            {% if dashboard_data.delayed_activities %}
+                                <span class="tag tag-delayed">{{ dashboard_data.delayed_count }} Delayed</span>
+                                <ul style="margin:4px 0 0; padding-left:16px; font-size:12px;">
+                                    {% for da in dashboard_data.delayed_activities %}
+                                    <li>{{ da.title }} (+{{ da.delay_days }}d delay &rarr; impacts {{ da.impacted_tasks_count }} task(s))</li>
+                                    {% endfor %}
+                                </ul>
+                            {% else %}
+                                <span style="color:#15803d;">All activities on track</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    <tr>
+                        <th>Unresolved Critical Defects:</th>
+                        <td colspan="3">
+                            {% if dashboard_data.unresolved_critical %}
+                                <span class="tag tag-critical">{{ dashboard_data.unresolved_critical_count }} Critical/Major Unresolved</span>
+                                <ul style="margin:4px 0 0; padding-left:16px; font-size:12px;">
+                                    {% for cd in dashboard_data.unresolved_critical %}
+                                    <li><strong style="color:#b91c1c;">[{{ cd.severity }}]</strong> {{ cd.title }} &mdash; <em>{{ cd.module_affected }}</em> (Assigned: {{ cd.assigned_to }})</li>
+                                    {% endfor %}
+                                </ul>
+                            {% else %}
+                                <span style="color:#15803d; font-weight:600;">All critical defects resolved.</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% endif %}
+</section>
+
+</main>
+
+<footer>
+    Smart Healthcare Project Management System &copy; {{ today[:4] }}
+</footer>
+
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+    /* WBS hierarchy controls */
+    const projectSelect = document.getElementById("wbs_project_id");
+    const parentSelect = document.getElementById("parent_id");
+    const typeSelect = document.getElementById("item_type");
+    const wbsForm = document.querySelector('#wbs form[action*="save_wbs"]');
+
+    if (projectSelect && parentSelect && typeSelect) {
+        const originalParents = Array.from(parentSelect.options)
+            .filter(option => option.value !== "")
+            .map(option => ({
+                value: option.value,
+                text: option.textContent.trim(),
+                projectId: option.dataset.projectId,
+                itemType: option.dataset.itemType
+            }));
+
+        function updateItemTypes() {
+            const parentOption = parentSelect.options[parentSelect.selectedIndex];
+            const parentType = parentSelect.value ? parentOption.dataset.itemType : "";
+            let allowedTypes;
+
+            if (!parentSelect.value) {
+                allowedTypes = ["Deliverable"];
+            } else if (parentType === "Deliverable") {
+                allowedTypes = ["Sub-deliverable", "Work Package"];
+            } else if (parentType === "Sub-deliverable") {
+                allowedTypes = ["Work Package"];
+            } else {
+                allowedTypes = [];
+            }
+
+            Array.from(typeSelect.options).forEach(option => {
+                option.disabled = !allowedTypes.includes(option.value);
+            });
+
+            if (!allowedTypes.includes(typeSelect.value)) {
+                typeSelect.value = allowedTypes[0] || "";
+            }
+        }
+
+        function updateParentOptions() {
+            const selectedProject = projectSelect.value;
+            const previousParent = parentSelect.value;
+            parentSelect.innerHTML = "";
+
+            const rootOption = document.createElement("option");
+            rootOption.value = "";
+            rootOption.textContent = "None (Root Deliverable)";
+            parentSelect.appendChild(rootOption);
+
+            originalParents.forEach(item => {
+                if (item.projectId !== selectedProject) return;
+
+                const option = document.createElement("option");
+                option.value = item.value;
+                option.textContent = item.text;
+                option.dataset.projectId = item.projectId;
+                option.dataset.itemType = item.itemType;
+                parentSelect.appendChild(option);
+            });
+
+            if (Array.from(parentSelect.options).some(option => option.value === previousParent)) {
+                parentSelect.value = previousParent;
+            } else {
+                parentSelect.value = "";
+            }
+            updateItemTypes();
+        }
+
+        projectSelect.addEventListener("change", updateParentOptions);
+        parentSelect.addEventListener("change", updateItemTypes);
+        updateParentOptions();
+
+        if (wbsForm) {
+            wbsForm.addEventListener("submit", function (event) {
+                const selectedParent = parentSelect.options[parentSelect.selectedIndex];
+                const parentType = parentSelect.value ? selectedParent.dataset.itemType : "";
+                const itemType = typeSelect.value;
+
+                const valid =
+                    (!parentSelect.value && itemType === "Deliverable") ||
+                    (parentType === "Deliverable" && ["Sub-deliverable", "Work Package"].includes(itemType)) ||
+                    (parentType === "Sub-deliverable" && itemType === "Work Package");
+
+                if (!valid) {
+                    event.preventDefault();
+                    alert("Please select a valid WBS parent and item type.");
+                }
+            });
+        }
+    }
+
+    /* Change Request form validation */
+    const changeForm = document.querySelector('#change-requests form[action*="save_change_request"]');
+    if (changeForm) {
+        changeForm.addEventListener("submit", function (event) {
+            const projectId = document.getElementById("change_project_id").value;
+            const title = document.getElementById("change_title").value.trim();
+            const description = document.getElementById("change_description").value.trim();
+            const justification = document.getElementById("change_justification").value.trim();
+
+            if (!projectId || !title || !description || !justification) {
+                event.preventDefault();
+                alert("Please select a project and complete all required change request fields.");
+            }
+        });
+    }
+
+    /* Auto-calculate activity end date from start date and duration */
+    const actStart = document.getElementById("act_start_date");
+    const actDuration = document.getElementById("act_duration_days");
+    const actEnd = document.getElementById("act_end_date");
+    if (actStart && actDuration && actEnd) {
+        function recalculateEndDate() {
+            if (actStart.value && actDuration.value) {
+                const startDate = new Date(actStart.value);
+                const duration = parseInt(actDuration.value, 10);
+                if (!isNaN(startDate.getTime()) && duration > 0) {
+                    const endDate = new Date(startDate);
+                    endDate.setDate(endDate.getDate() + duration);
+                    actEnd.value = endDate.toISOString().split("T")[0];
+                }
+            }
+        }
+        actStart.addEventListener("change", recalculateEndDate);
+        actDuration.addEventListener("input", recalculateEndDate);
+    }
+});
+</script>
+
+</body>
+</html>
